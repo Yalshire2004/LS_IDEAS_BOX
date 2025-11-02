@@ -34,7 +34,21 @@ app.use(session({
     sameSite: isProduction ? 'none' : 'lax' // Required for cross-origin in production
   }
 }));
-app.use(express.static('public'));
+// Serve static files from public directory (CSS, JS, images, etc.)
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: isProduction ? '1y' : '0', // Cache static files in production
+  etag: true,
+  lastModified: true
+}));
+
+// Serve HTML files explicitly
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/admin.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 
 // Middleware to check admin authentication
 const requireAuth = (req, res, next) => {
