@@ -63,6 +63,7 @@ This app is optimized for deployment to Render.com
 2. **Configure the service:**
    - **Name**: anonymous-ideas-box (or your preferred name)
    - **Environment**: Node
+   - **Node Version**: 20.x (important - better-sqlite3 requires Node 20)
    - **Build Command**: `npm install`
    - **Start Command**: `npm start`
    - **Plan**: Free (or choose a paid plan)
@@ -107,4 +108,6 @@ If you prefer, you can use the included `render.yaml` file:
 - **Session Security**: The app automatically uses secure cookies in production (HTTPS).
 
 - **Service Sleep**: Free tier services on Render sleep after 15 minutes of inactivity. The first request after sleep may take ~30 seconds to respond while the service wakes up.
+
+- **Node.js Version**: The app requires Node.js 20.x. The `render.yaml` file is configured to use Node 20. If deploying manually, ensure you set the Node version to 20 in Render's settings.
 
