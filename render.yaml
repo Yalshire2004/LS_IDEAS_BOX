@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: anonymous-ideas-box
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: ADMIN_PASSWORD
+        sync: false  # Must be set manually in Render dashboard
+      - key: SESSION_SECRET
+        generateValue: true  # Render will auto-generate this
+    healthCheckPath: /health
+

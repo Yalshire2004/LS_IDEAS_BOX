@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>View Ideas - Admin</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="admin-page">
+    <div class="logo-corner">
+        <img src="lovestreamlogo.avif" alt="LoveStream Church Logo" class="logo">
+        <p class="logo-text">Lovestream</p>
+    </div>
+    <div class="container">
+        <div class="card">
+            <h1>📋 All Submitted Ideas</h1>
+            <div class="header-actions">
+                <a href="index.html" class="back-link">← Submit New Idea</a>
+                <div class="action-buttons">
+                    <div class="filter-control">
+                        <label for="statusFilter">Filter by Status:</label>
+                        <select id="statusFilter" class="filter-select">
+                            <option value="all">All Ideas</option>
+                            <option value="Not Implemented">Not Implemented</option>
+                            <option value="Implemented">Implemented</option>
+                            <option value="Rejected">Rejected</option>
+                        </select>
+                    </div>
+                    <button id="exportBtn" class="export-btn">📥 Export to Excel</button>
+                    <button id="refreshBtn" class="refresh-btn">🔄 Refresh</button>
+                </div>
+            </div>
+            
+            <div id="ideasList" class="ideas-list">
+                <p class="loading">Loading ideas...</p>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>© 2025 LOVESTREAM CHURCH</p>
+    </footer>
+
+    <!-- Password Modal -->
+    <div id="passwordModal" class="password-modal">
+        <div class="password-modal-content">
+            <h2>🔒 Admin Access Required</h2>
+            <p>Please enter the password to view all ideas:</p>
+            <form id="passwordForm">
+                <input 
+                    type="password" 
+                    id="passwordInput" 
+                    placeholder="Enter password"
+                    required
+                    autofocus
+                />
+                <div id="passwordError" class="password-error"></div>
+                <button type="submit" class="password-submit-btn">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const ideasList = document.getElementById('ideasList');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const statusFilter = document.getElementById('statusFilter');
+        const passwordModal = document.getElementById('passwordModal');
+        const passwordForm = document.getElementById('passwordForm');
+        const passwordInput = document.getElementById('passwordInput');
+        const passwordError = document.getElementById('passwordError');
+        let allIdeas = [];
+        let isAuthenticated = false;
+
+        // Check authentication status on page load
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/admin/check', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to check authentication');
+                }
+                
+                const data = await response.json();
+                isAuthenticated = data.authenticated;
+                
+                if (!isAuthenticated) {
+                    passwordModal.style.display = 'flex';
+                } else {
+                    passwordModal.style.display = 'none';
+                    loadIdeas();
+                }
+            } catch (error) {
+                console.error('Error checking auth:', error);
+                passwordError.textContent = 'Unable to connect to server. Please refresh the page and try again.';
+                passwordError.style.display = 'block';
+                passwordModal.style.display = 'flex';
+            }
+        }
+
+        // Handle password submission
+        passwordForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const password = passwordInput.value.trim();
+            
+            if (!password) {
+                passwordError.textContent = 'Please enter a password';
+                passwordError.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ password })
+                });
+
+                if (!response.ok && response.status !== 401) {
+                    throw new Error(`Server error: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    isAuthenticated = true;
+                    passwordModal.style.display = 'none';
+                    passwordInput.value = '';
+                    passwordError.style.display = 'none';
+                    loadIdeas();
+                } else {
+                    passwordError.textContent = data.error || 'Invalid password';
+                    passwordError.style.display = 'block';
+                    passwordInput.value = '';
+                    passwordInput.focus();
+                }
+            } catch (error) {
+                passwordError.textContent = `Error connecting to server: ${error.message}. Please make sure the server is running and try again.`;
+                passwordError.style.display = 'block';
+                console.error('Error:', error);
+            }
+        });
+
+        function displayIdeas(ideas) {
+            if (ideas.length === 0) {
+                const filterValue = statusFilter.value;
+                if (filterValue === 'all') {
+                    ideasList.innerHTML = '<p class="empty">No ideas submitted yet.</p>';
+                } else {
+                    ideasList.innerHTML = `<p class="empty">No ideas with status "${filterValue}".</p>`;
+                }
+                return;
+            }
+
+            ideasList.innerHTML = ideas.map(idea => `
+                <div class="idea-card" data-id="${idea.id}">
+                    <div class="idea-content">${escapeHtml(idea.idea)}</div>
+                    <div class="idea-controls">
+                        <div class="status-control">
+                            <label for="status-${idea.id}">Status:</label>
+                            <select id="status-${idea.id}" class="status-select" data-id="${idea.id}">
+                                <option value="Not Implemented" ${idea.status === 'Not Implemented' ? 'selected' : ''}>Not Implemented</option>
+                                <option value="Implemented" ${idea.status === 'Implemented' ? 'selected' : ''}>Implemented</option>
+                                <option value="Rejected" ${idea.status === 'Rejected' ? 'selected' : ''}>Rejected</option>
+                            </select>
+                        </div>
+                        <button class="delete-btn" data-id="${idea.id}" onclick="deleteIdea(${idea.id})">🗑️ Delete</button>
+                    </div>
+                    <div class="idea-meta">
+                        <span class="idea-id">#${idea.id}</span>
+                        <span class="idea-date">${formatDate(idea.timestamp)}</span>
+                    </div>
+                </div>
+            `).join('');
+            
+            // Attach status change listeners
+            document.querySelectorAll('.status-select').forEach(select => {
+                select.addEventListener('change', handleStatusChange);
+            });
+        }
+
+        function filterIdeas() {
+            const filterValue = statusFilter.value;
+            let filteredIdeas;
+            
+            if (filterValue === 'all') {
+                filteredIdeas = allIdeas;
+            } else {
+                filteredIdeas = allIdeas.filter(idea => idea.status === filterValue);
+            }
+            
+            displayIdeas(filteredIdeas);
+        }
+
+        async function loadIdeas() {
+            if (!isAuthenticated) {
+                checkAuth();
+                return;
+            }
+
+            try {
+                ideasList.innerHTML = '<p class="loading">Loading ideas...</p>';
+                
+                const response = await fetch('/api/ideas', {
+                    credentials: 'include'
+                });
+                
+                if (response.status === 401) {
+                    isAuthenticated = false;
+                    passwordModal.style.display = 'flex';
+                    ideasList.innerHTML = '<p class="error">Session expired. Please login again.</p>';
+                    return;
+                }
+
+                allIdeas = await response.json();
+                filterIdeas();
+            } catch (error) {
+                if (error.message.includes('401')) {
+                    isAuthenticated = false;
+                    passwordModal.style.display = 'flex';
+                }
+                ideasList.innerHTML = '<p class="error">Error loading ideas. Please try again.</p>';
+                console.error('Error:', error);
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML.replace(/\n/g, '<br>');
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        async function handleStatusChange(e) {
+            const ideaId = e.target.dataset.id;
+            const newStatus = e.target.value;
+            
+            try {
+                const response = await fetch(`/api/ideas/${ideaId}/status`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ status: newStatus })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showNotification('Status updated successfully', 'success');
+                    // Update the idea in allIdeas array
+                    const idea = allIdeas.find(i => i.id == ideaId);
+                    if (idea) {
+                        idea.status = newStatus;
+                    }
+                    filterIdeas();
+                } else if (response.status === 401) {
+                    isAuthenticated = false;
+                    passwordModal.style.display = 'flex';
+                    showNotification('Session expired. Please login again.', 'error');
+                } else {
+                    showNotification(data.error || 'Failed to update status', 'error');
+                    // Reload to get correct status
+                    loadIdeas();
+                }
+            } catch (error) {
+                showNotification('Error updating status. Please try again.', 'error');
+                console.error('Error:', error);
+                loadIdeas();
+            }
+        }
+        
+        async function deleteIdea(ideaId) {
+            showConfirmDialog(
+                'Delete Idea',
+                'Are you sure you want to delete this idea? This action cannot be undone.',
+                () => {
+                    // Confirm callback
+                    performDelete(ideaId);
+                },
+                () => {
+                    // Cancel callback - do nothing
+                }
+            );
+        }
+        
+        async function performDelete(ideaId) {
+            try {
+                const response = await fetch(`/api/ideas/${ideaId}`, {
+                    method: 'DELETE',
+                    credentials: 'include'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showNotification('Idea deleted successfully', 'success');
+                    // Remove from allIdeas array
+                    allIdeas = allIdeas.filter(idea => idea.id != ideaId);
+                    filterIdeas();
+                } else if (response.status === 401) {
+                    isAuthenticated = false;
+                    passwordModal.style.display = 'flex';
+                    showNotification('Session expired. Please login again.', 'error');
+                } else {
+                    showNotification(data.error || 'Failed to delete idea', 'error');
+                }
+            } catch (error) {
+                showNotification('Error deleting idea. Please try again.', 'error');
+                console.error('Error:', error);
+            }
+        }
+        
+        function exportToExcel() {
+            if (!isAuthenticated) {
+                passwordModal.style.display = 'flex';
+                showNotification('Please login to export ideas', 'error');
+                return;
+            }
+            window.location.href = '/api/ideas/export';
+            showNotification('Exporting ideas...', 'success');
+        }
+        
+        function showNotification(message, type) {
+            // Get all existing notifications (excluding confirm dialogs)
+            const existingNotifications = document.querySelectorAll('.notification:not(.confirm-dialog)');
+            
+            // Remove the oldest one if we have more than 2 notifications
+            if (existingNotifications.length >= 2) {
+                existingNotifications[0].style.opacity = '0';
+                setTimeout(() => existingNotifications[0].remove(), 300);
+            }
+            
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            // Calculate bottom position based on number of notifications
+            const allNotifications = document.querySelectorAll('.notification:not(.confirm-dialog)');
+            const index = Array.from(allNotifications).indexOf(notification);
+            const bottomOffset = 20 + (index * 70); // 70px spacing between notifications
+            notification.style.bottom = `${bottomOffset}px`;
+            
+            setTimeout(() => {
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    notification.remove();
+                    // Reposition remaining notifications
+                    repositionNotifications();
+                }, 300);
+            }, 3000);
+        }
+        
+        function repositionNotifications() {
+            const notifications = document.querySelectorAll('.notification:not(.confirm-dialog)');
+            notifications.forEach((notif, index) => {
+                notif.style.bottom = `${20 + (index * 70)}px`;
+            });
+        }
+        
+        function showConfirmDialog(title, message, onConfirm, onCancel) {
+            // Remove existing confirm dialog if any
+            const existing = document.querySelector('.confirm-dialog');
+            if (existing) {
+                existing.remove();
+            }
+            
+            const dialog = document.createElement('div');
+            dialog.className = 'notification confirm-dialog';
+            
+            dialog.innerHTML = `
+                <div class="confirm-dialog-content">
+                    <h3>${title}</h3>
+                    <p>${message}</p>
+                    <div class="confirm-buttons">
+                        <button class="confirm-btn-cancel">Cancel</button>
+                        <button class="confirm-btn-ok">Delete</button>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(dialog);
+            
+            // Add event listeners
+            dialog.querySelector('.confirm-btn-ok').addEventListener('click', () => {
+                dialog.style.opacity = '0';
+                setTimeout(() => {
+                    dialog.remove();
+                    if (onConfirm) onConfirm();
+                }, 300);
+            });
+            
+            dialog.querySelector('.confirm-btn-cancel').addEventListener('click', () => {
+                dialog.style.opacity = '0';
+                setTimeout(() => {
+                    dialog.remove();
+                    if (onCancel) onCancel();
+                }, 300);
+            });
+            
+            // Close on background click
+            dialog.addEventListener('click', (e) => {
+                if (e.target === dialog) {
+                    dialog.style.opacity = '0';
+                    setTimeout(() => {
+                        dialog.remove();
+                        if (onCancel) onCancel();
+                    }, 300);
+                }
+            });
+        }
+        
+        const exportBtn = document.getElementById('exportBtn');
+        exportBtn.addEventListener('click', exportToExcel);
+        
+        statusFilter.addEventListener('change', filterIdeas);
+        
+        refreshBtn.addEventListener('click', loadIdeas);
+        
+        // Check authentication and load ideas on page load
+        checkAuth();
+        
+        // Auto-refresh every 30 seconds (only if authenticated)
+        setInterval(() => {
+            if (isAuthenticated) {
+                loadIdeas();
+            }
+        }, 30000);
+    </script>
+</body>
+</html>
+

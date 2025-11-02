@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="theme-color" content="#667eea">
+    <title>Anonymous Ideas Box</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="form-page">
+    <div class="logo-corner">
+        <img src="lovestreamlogo.avif" alt="LoveStream Church Logo" class="logo">
+        <p class="logo-text">Lovestream</p>
+    </div>
+    <div class="container">
+        <div class="card">
+            <h1>💡 Anonymous Ideas Box</h1>
+            <p class="subtitle">Share your ideas anonymously to improve our church</p>
+            
+            <form id="ideaForm">
+                <div class="form-group">
+                    <label for="idea">Your Idea:</label>
+                    <textarea 
+                        id="idea" 
+                        name="idea" 
+                        rows="6" 
+                        placeholder="Enter your idea here..."
+                        required
+                    ></textarea>
+                </div>
+                
+                <button type="submit" class="submit-btn">Submit Idea</button>
+            </form>
+            
+            <div id="message" class="message"></div>
+            
+            <div class="links">
+                <a href="admin.html" class="admin-link">View All Ideas →</a>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer">
+        <p>© 2025 LOVESTREAM CHURCH</p>
+    </footer>
+
+    <script>
+        const form = document.getElementById('ideaForm');
+        const messageDiv = document.getElementById('message');
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const idea = document.getElementById('idea').value.trim();
+            
+            if (!idea) {
+                showMessage('Please enter an idea', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/ideas', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ idea })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showMessage(data.message || 'Idea submitted successfully!', 'success');
+                    form.reset();
+                } else {
+                    showMessage(data.error || 'Failed to submit idea', 'error');
+                }
+            } catch (error) {
+                showMessage('Error submitting idea. Please try again.', 'error');
+                console.error('Error:', error);
+            }
+        });
+
+        function showMessage(text, type) {
+            messageDiv.textContent = text;
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
+
